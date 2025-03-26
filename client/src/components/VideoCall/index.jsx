@@ -126,7 +126,7 @@ const VideoCall = ({
   const toggleVideo = (disabled) => {
     if (localStream) {
       localStream.getVideoTracks().forEach((track) => {
-        track.enabled = !disabled;
+        track.enabled = disabled;
       });
     }
   };
@@ -187,14 +187,14 @@ const VideoCall = ({
       }
   
       // Clean up media streams
-      [localStream, remoteStream, screenStream].forEach(stream => {
-        if (stream) {
-          stream.getTracks().forEach(track => {
-            track.stop();          // Stop each track
-            track.enabled = false; // Disable track//
-          });
-        }
-      });
+      // [localStream, remoteStream, screenStream].forEach(stream => {
+      //   if (stream) {
+      //     stream.getTracks().forEach(track => {
+      //       track.stop();          // Stop each track
+      //       track.enabled = false; // Disable track
+      //     });
+      //   }
+      // });
   
       // Reset states
       setRemoteStream(null);

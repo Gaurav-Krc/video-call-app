@@ -182,13 +182,14 @@ io.on('connection', (socket) => {
 
     socket.on('end-call', async ({ roomId }) => {
         try {
+            // Force all participants to leave the room
+            io.socketsLeave(roomId); 
             // Mark room as ended
             await db.query(
                 'UPDATE rooms SET ended_at = NOW() WHERE id = ?',
                 [roomId]
             );
-            // Force all participants to leave the room
-            io.socketsLeave(roomId); // New line
+
             // Notify all participants
             io.to(roomId).emit('call-ended');
             activeCalls.delete(roomId);
