@@ -162,6 +162,33 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('chat-message', async (message) => {
+        try {
+          // Get user details
+          const [users] = await db.query(
+            'SELECT name FROM users WHERE id = ?',
+            [message.userId]
+          );
+          
+          // Broadcast message with username
+          const msgWithUsername = {
+            ...message,
+            userName: users[0]?.name || `User-${message.userId.slice(0, 4)}`
+          };
+      
+          // Save to database
+          await db.query(
+            'INSERT INTO chat_messages (room_id, user_id, message) VALUES (?, ?, ?)',
+            [message.roomId, message.userId, message.text]
+          );
+      
+          // Broadcast to room
+          socket.to(message.roomId).emit('chat-message', msgWithUsername);
+        } catch (error) {
+          console.error('Chat message error:', error);
+        }
+      });
+
     // Handle call rejection
     socket.on('reject-call', ({ callerId, roomId }) => {
         const callerSocket = connectedUsers.get(callerId);

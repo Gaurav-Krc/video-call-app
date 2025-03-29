@@ -6,6 +6,7 @@ import PeerVideo from "./PeerVideo";
 import { socket } from "../../contexts/SocketContext";
 import { message } from "antd";
 import Transcripts from "../Transcripts";
+import Chat from "../Chat";
 
 const VideoCall = ({
   localStream,
@@ -20,11 +21,41 @@ const VideoCall = ({
   const [screenStream, setScreenStream] = useState(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [transcripts, setTranscripts] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+
   const recognitionRef = useRef(null);
   const peerRef = useRef(null);
   const remoteVideoRef = useRef();
   const localVideoRef = useRef();
 
+  // Add chat message handler
+  const handleSendMessage = useCallback(
+    (message) => {
+      const msgData = {
+        roomId,
+        text: message,
+        userId: currentUser,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Update local state immediately
+      setChatMessages((prev) => [...prev, msgData]);
+
+      // Send to server
+      socket.emit("chat-message", msgData);
+    },
+    [roomId, currentUser]
+  );
+
+  // Add message reception handler
+  useEffect(() => {
+    const handleChatMessage = (message) => {
+      setChatMessages((prev) => [...prev, message]);
+    };
+
+    socket.on("chat-message", handleChatMessage);
+    return () => socket.off("chat-message", handleChatMessage);
+  }, []);
 
   useEffect(() => {
     if (visible && roomId) {
@@ -110,7 +141,6 @@ const VideoCall = ({
     };
   }, [handleTranscript]);
 
-
   const toggleAudio = useCallback(
     (muted) => {
       setIsMuted(muted);
@@ -131,7 +161,6 @@ const VideoCall = ({
     }
   };
 
-  // Screen sharing
   const shareScreen = useCallback(async () => {
     try {
       if (isScreenSharing) {
@@ -174,10 +203,8 @@ const VideoCall = ({
     }
   });
 
-
   const endCall = useCallback(async () => {
     try {
-
       // Clean up peer connection properly
       if (peerRef.current) {
         if (!peerRef.current.destroyed) {
@@ -185,42 +212,30 @@ const VideoCall = ({
         }
         peerRef.current = null;
       }
-  
-      // Clean up media streams
-      // [localStream, remoteStream, screenStream].forEach(stream => {
-      //   if (stream) {
-      //     stream.getTracks().forEach(track => {
-      //       track.stop();          // Stop each track
-      //       track.enabled = false; // Disable track
-      //     });
-      //   }
-      // });
-  
+
       // Reset states
       setRemoteStream(null);
       setScreenStream(null);
       setIsScreenSharing(false);
       setTranscripts([]);
+      setChatMessages([]);
 
-  
       // Notify server to end call
-      socket.emit('end-call', { roomId });
-  
+      socket.emit("end-call", { roomId });
+
       // Close the modal
       setVisible(false);
-  
+
       // Additional cleanup for speech recognition
       if (recognitionRef.current) {
         recognitionRef.current.stop();
         recognitionRef.current = null;
       }
-  
     } catch (error) {
-      console.error('Error ending call:', error);
+      console.error("Error ending call:", error);
     }
   }, [roomId, localStream, remoteStream, screenStream, setVisible]);
 
-  // Handle remote call ending
   const handleRemoteEndCall = useCallback(() => {
     endCall();
   }, [endCall]);
@@ -289,78 +304,105 @@ const VideoCall = ({
         try {
           peerRef.current.destroy();
         } catch (destroyError) {
-          console.warn('Peer cleanup error:', destroyError);
+          console.warn("Peer cleanup error:", destroyError);
         }
       }
-      
+
       // Clean up media streams
-      [screenStream, remoteStream].forEach(stream => {
+      [screenStream, remoteStream].forEach((stream) => {
         if (stream) {
-          stream.getTracks().forEach(track => track.stop());
+          stream.getTracks().forEach((track) => track.stop());
         }
       });
-  
-      socket.off('webrtc-signal', handleSignal);
-      socket.off('end-call', handleEndCall);
+
+      socket.off("webrtc-signal", handleSignal);
+      socket.off("end-call", handleEndCall);
     };
   }, [visible, roomId, isCaller, localStream, currentUser]);
 
   return (
     <Modal
-      title={`Video Call - Room ID: ${roomId}`}
+      title={null}
       open={visible}
       onCancel={endCall}
       footer={null}
-      width="80%"
+      width="90%"
       closable={false}
       maskClosable={false}
-      className="rounded-lg overflow-hidden"
+      className="rounded-lg border-none"
       styles={{
-        padding: "0",
-        height: "70vh",
-        minHeight: "400px",
-        display: "flex",
-        flexDirection: "column",
+        body: {
+          height: "75vh",
+          minHeight: "500px",
+          background: "#111827",
+          overflow: "auto",
+        },
       }}
     >
-      <div className="flex flex-col h-full">
-        {/* Video Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-2 flex-1 min-h-0">
-          {/* Local Video */}
-          <div className="relative bg-gray-800 rounded-lg overflow-hidden h-full">
-            <PeerVideo
-              stream={screenStream || localStream}
-              isLocal={true}
-              ref={localVideoRef}
-            />
+      {/* Main Content Area */}
+      <div className="flex h-full flex-col md:flex-row">
+        {/* Video + Controls Section */}
+        <div className="flex flex-col flex-1">
+          {/* Video Container */}
+          <div className="relative flex-1 ">
+            <div className="md:flex gap-4 p-4 h-full">
+              <div className="flex-1 bg-gray-800 rounded-xl overflow-hidden md:mb-0 mb-4">
+                <PeerVideo
+                  stream={screenStream || localStream}
+                  isLocal={true}
+                  ref={localVideoRef}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="flex-1 bg-gray-800 rounded-xl overflow-hidden">
+                <PeerVideo
+                  stream={remoteStream}
+                  isLocal={false}
+                  ref={remoteVideoRef}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Remote Video */}
-          <div className="relative bg-gray-800 rounded-lg overflow-hidden h-full">
-            <PeerVideo
-              stream={remoteStream}
-              isLocal={false}
-              ref={remoteVideoRef}
+          {/* Control Panel */}
+          <div className="border-t border-gray-700 bg-gray-800 p-4">
+            <Controls
+              localStream={localStream}
+              endCall={endCall}
+              isMuted={isMuted}
+              toggleAudio={toggleAudio}
+              toggleVideo={toggleVideo}
+              shareScreen={shareScreen}
+              isScreenSharing={isScreenSharing}
             />
           </div>
         </div>
 
-        {/* Transcripts panel */}
-        <div className="px-4 mb-4">
-          <Transcripts transcripts={transcripts} currentUser={currentUser} />
-        </div>
+        {/* Chat & Transcription Panel */}
+        <div className="md:w-96 border-t md:border-t-0 md:border-l border-gray-700 flex flex-col">
+          {/* Chat */}
+          <div className="p-4 border-b border-gray-700 h-2/3">
+            <h3 className="text-gray-200 font-semibold mb-3">Chat</h3>
+            <div className="h-[43vh] overflow-hidden scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+              <Chat
+                messages={chatMessages}
+                currentUser={currentUser}
+                onSendMessage={handleSendMessage}
+              />
+            </div>
+          </div>
 
-        {/* Controls */}
-        <div className="flex justify-center gap-4 p-4 bg-gray-800">
-          <Controls
-            localStream={localStream}
-            endCall={endCall}
-            isMuted={isMuted}
-            toggleAudio={toggleAudio}
-            toggleVideo={toggleVideo}
-            shareScreen={shareScreen}
-            isScreenSharing={isScreenSharing}
-          />
+          {/* Transcription */}
+          <div className="p-4 h-1/3">
+            <h3 className="text-gray-200 font-semibold mb-3">Transcription</h3>
+            <div className="h-[17.5vh] overflow-hidden scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+              <Transcripts
+                transcripts={transcripts}
+                currentUser={currentUser}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </Modal>

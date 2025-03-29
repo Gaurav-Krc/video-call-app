@@ -1,5 +1,3 @@
-
-
 import { useEffect, useRef } from "react";
 
 const Transcripts = ({ transcripts, currentUser }) => {
@@ -11,7 +9,7 @@ const Transcripts = ({ transcripts, currentUser }) => {
 
   return (
     <div
-      className="bg-gray-800 p-4 rounded-lg h-48 overflow-y-auto 
+      className="bg-gray-800 p-4 rounded-lg h-full overflow-y-auto 
                   scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800"
     >
       {transcripts.map((t, index) => (
